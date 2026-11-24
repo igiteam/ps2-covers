@@ -8,7 +8,7 @@ Shows title as text overlay when image fails to load
 import json
 import os
 from datetime import datetime
-
+##
 # Configuration
 JSON_FILE = "ps2_games_pcsx2.json"
 OUTPUT_HTML = "index.html"
