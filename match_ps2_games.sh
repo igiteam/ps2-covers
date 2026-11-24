@@ -1,199 +1,96 @@
-
 cd ~/Downloads
 
-cat > ps2_games_covers.sh <<'EOF'
+cat > ps2_match_covers.sh <<'EOF'
 #!/bin/bash
 set -e
 
-cd "$(dirname "$0")"
+INPUT="$HOME/Downloads/ps2_games_titles_unique.json"
+TREE="$HOME/Downloads/ps2_games_github_tree.json"
+OUTPUT="$HOME/Downloads/ps2_games_pcsx.json"
 
-INPUT="$HOME/Downloads/ps2_games.json"
-TREE="ps2_games_github_tree.json"
-ZIP="ps2_covers_fallback.zip"
-TEMP="ps2_covers_fallback"
+BASE="https://raw.githubusercontent.com/igiteam/ps2-covers/refs/heads/main"
+PLACEHOLDER="$BASE/ps2-cover-default.png"
 
-if [ ! -f "$INPUT" ]; then
-    echo "ERROR: ps2_games.json not found!"
+if [ ! -f "$INPUT" ] || [ ! -f "$TREE" ]; then
+    echo "ERROR: Input or GitHub tree file is missing."
     exit 1
 fi
 
-echo "Checking input JSON..."
-jq -e 'type == "object"' "$INPUT" > /dev/null
-
-echo "Downloading GitHub tree..."
-
-URL="https://api.github.com/repos/igiteam/ps2-covers/git/trees/main?recursive=1"
-
-SUCCESS=0
-
-for ATTEMPT in 1 2 3 4; do
-    echo "Attempt $ATTEMPT of 4..."
-
-    if curl -fLsS \
-        --retry 2 \
-        --retry-delay 3 \
-        --connect-timeout 20 \
-        --max-time 180 \
-        -H "Accept: application/vnd.github+json" \
-        -H "User-Agent: PS2-Cover-Generator" \
-        "$URL" -o "$TREE" \
-        && jq -e '.tree | type == "array"' "$TREE" > /dev/null; then
-
-        SUCCESS=1
-        break
-    fi
-
-    sleep 3
-done
-
-if [ "$SUCCESS" -ne 1 ]; then
-    echo "GitHub API unavailable. Trying ZIP fallback..."
-
-    rm -rf "$TEMP"
-    mkdir -p "$TEMP"
-
-    if ! curl -fLsS \
-        --retry 3 \
-        --retry-delay 3 \
-        --connect-timeout 20 \
-        --max-time 300 \
-        "https://codeload.github.com/igiteam/ps2-covers/zip/refs/heads/main" \
-        -o "$ZIP"; then
-        echo "ERROR: GitHub API and ZIP download both failed!"
-        exit 1
-    fi
-
-    unzip -oq "$ZIP" -d "$TEMP"
-
-    ROOT="$(find "$TEMP" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
-
-    if [ -z "$ROOT" ]; then
-        echo "ERROR: ZIP extraction failed!"
-        exit 1
-    fi
-
-    jq -n --arg root "$ROOT" '
-      [
-        ($root + "/covers"),
-        ($root + "/covers/3d")
-      ] as $dirs |
-      [
-        $dirs[] as $dir |
-        if ($dir | endswith("/3d")) then
-          (try (input_filename) catch empty)
-        else empty end
-      ]
-    ' > /dev/null
-
-    find "$ROOT/covers" -type f \
-        \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" \) \
-        | sed "s|$ROOT/||" \
-        | jq -R -s '
-            split("\n") | map(select(length > 0)) |
-            map({
-              path: .,
-              filename: (split("/") | last),
-              name: (split("/") | last | sub("\\.[^.]+$"; ""))
-            }) |
-            {tree: map(. + {type: "blob"}), truncated: false}
-          ' > "$TREE"
-fi
-
-echo "Matching games and covers..."
+echo "Building cover index..."
+echo "Matching game IDs..."
 
 jq -n \
   --slurpfile games "$INPUT" \
-  --slurpfile github "$TREE" '
-
-  def normalize:
-    gsub("//"; " ")
-    | ascii_downcase
-    | gsub("[^a-z0-9]"; "");
-
-  def filename:
-    split("/") | last;
-
-  def find_cover($covers; $id; $title):
-    (
-      [$covers[] | select((.name | normalize) == ($id | normalize))][0] //
-      [$covers[] | select((.name | normalize) == ($title | normalize))][0] //
-      null
-    );
-
-  ($github[0].tree // []) as $tree |
-
-  [
-    $tree[]
-    | select(.type == "blob")
-    | select(.path | test("\\.(jpg|jpeg|png|webp)$"; "i"))
-    | {
-        path: .path,
-        filename: (.path | filename),
-        name: (.path | filename | sub("\\.[^.]+$"; ""))
-      }
-  ] as $all_covers |
-
-  [
-    $all_covers[]
-    | select(.path | startswith("covers/"))
-    | select((.path | startswith("covers/3d/")) | not)
-  ] as $covers_2d |
-
-  [
-    $all_covers[]
-    | select(.path | startswith("covers/3d/"))
-  ] as $covers_3d |
+  --slurpfile tree "$TREE" \
+  --arg base "$BASE" \
+  --arg placeholder "$PLACEHOLDER" '
 
   (
-    $games[0]
-    | to_entries
-    | map(
-        . as $game |
-
-        ($game.value.serial // $game.key) as $id |
-        ($game.value.title // "") as $title |
-
-        (find_cover($covers_2d; $id; $title)) as $cover |
-        (find_cover($covers_3d; $id; $title)) as $cover3d |
-
-        {
-          key: $game.key,
-          value: (
-            $game.value + {
-              cover_url: (
-                if $cover then
-                  "https://raw.githubusercontent.com/igiteam/ps2-covers/refs/heads/main/"
-                  + ($cover.path | split("/") | map(@uri) | join("/"))
-                else "" end
-              ),
-              "3d_cover_url": (
-                if $cover3d then
-                  "https://raw.githubusercontent.com/igiteam/ps2-covers/refs/heads/main/"
-                  + ($cover3d.path | split("/") | map(@uri) | join("/"))
-                else "" end
-              ),
-              filename: (
-                if $cover then $cover.filename else "" end
-              )
-            }
-          )
-        }
+    reduce ($tree[0].tree[]?) as $file
+      ({};
+        ($file.path // "") as $path
+        | if ($path | startswith("covers/default/")) then
+            ($path | split("/")[-1] | split(".")[0] | ascii_upcase) as $id
+            | .[$id] = (.[$id] // {}) + {
+                "2d": ($base + "/" + $path)
+              }
+          elif ($path | startswith("covers/3d/")) then
+            ($path | split("/")[-1] | split(".")[0] | ascii_upcase) as $id
+            | .[$id] = (.[$id] // {}) + {
+                "3d": ($base + "/" + $path)
+              }
+          else .
+          end
       )
-    | from_entries
-  )
-' > ps2_games_pcsx.json
+  ) as $index
+
+  | [
+      $games[0][]
+      | . as $game
+      | ($game.id | ascii_upcase) as $id
+      | ($index[$id] // {}) as $cover
+      | {
+          id: $game.id,
+          title: $game.title,
+          cover_url: ($cover["2d"] // $placeholder),
+          cover_3d_url: ($cover["3d"] // $placeholder)
+        }
+    ]
+' > "$OUTPUT"
+
+TOTAL=$(jq 'length' "$OUTPUT")
+COVER_2D=$(jq --arg p "$PLACEHOLDER" '[.[] | select(.cover_url != $p)] | length' "$OUTPUT")
+COVER_3D=$(jq --arg p "$PLACEHOLDER" '[.[] | select(.cover_3d_url != $p)] | length' "$OUTPUT")
+MISSING_2D=$(jq --arg p "$PLACEHOLDER" '[.[] | select(.cover_url == $p)] | length' "$OUTPUT")
+MISSING_3D=$(jq --arg p "$PLACEHOLDER" '[.[] | select(.cover_3d_url == $p)] | length' "$OUTPUT")
+BOTH_MISSING=$(jq --arg p "$PLACEHOLDER" '[.[] | select(.cover_url == $p and .cover_3d_url == $p)] | length' "$OUTPUT")
 
 echo ""
-echo "================================"
-echo "PS2 JSON GENERATION COMPLETE"
-echo "================================"
-echo "Games:     $(jq 'length' ps2_games_pcsx.json)"
-echo "2D covers: $(jq '[.[] | select(.cover_url != "")] | length' ps2_games_pcsx.json)"
-echo "3D covers: $(jq '[.[] | select(."3d_cover_url" != "")] | length' ps2_games_pcsx.json)"
-echo "No covers: $(jq '[.[] | select(.cover_url == "")] | length' ps2_games_pcsx.json)"
+echo "======================================"
+echo "PS2 COVER MATCHING COMPLETE"
+echo "======================================"
 echo ""
-echo "Output: ps2_games_pcsx.json"
+echo "TOTAL ENTRIES: $TOTAL"
+echo ""
+echo "2D covers found: $COVER_2D"
+echo "2D placeholders: $MISSING_2D"
+echo ""
+echo "3D covers found: $COVER_3D"
+echo "3D placeholders: $MISSING_3D"
+echo ""
+echo "Missing both covers: $BOTH_MISSING"
+echo ""
+echo "Output: $OUTPUT"
+echo ""
+echo "======================================"
+echo "FIRST 3 ENTRIES"
+echo "======================================"
+jq '.[0:3]' "$OUTPUT"
+echo ""
+echo "======================================"
+echo "FINAL ENTRY COUNT: $TOTAL"
+echo "======================================"
 EOF
 
-chmod +x ps2_games_covers.sh
-./ps2_games_covers.sh
+chmod +x ps2_match_covers.sh
+./ps2_match_covers.sh
