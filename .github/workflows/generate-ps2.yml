@@ -1,0 +1,49 @@
+
+name: Generate PS2 Games Website
+
+on:
+  push:
+    paths:
+      - 'ps2_games_pcsx.json'
+      - 'requirements.txt'
+      - '*.py'
+      - '.github/workflows/generate-ps2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install requirements
+        run: |
+          python -m pip install --upgrade pip
+          if [ -s requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+
+      - name: Generate PS2 website
+        run: python ps2_games_pcsx2.py
+
+      - name: Commit generated HTML
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ps2_games_pcsx2.html
+          if ! git diff --cached --quiet; then
+            git commit -m "Generate PS2 games website"
+            git push
+          else
+            echo "No changes to generated HTML."
+          fi
