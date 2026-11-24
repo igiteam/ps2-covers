@@ -1,77 +1,105 @@
+
 #!/usr/bin/env python3
 """
-ps2_games_pcsx Games Grid Generator
-Creates an Xemu-style grid website from your ps2_games_pcsx games JSON
-Shows title as text overlay when image fails to load
+PS2 Games Grid Generator
+Creates an Xemu-style grid website from ps2_games_pcsx2.json.
+
+Features:
+- Alphabetical game sorting
+- Search results automatically move to the top
+- Original order restored when search is cleared
+- Clickable game cards
+- Automatic fallback titles when covers fail
+- Search result counter
+- Keyboard shortcut (/)
 """
 
 import json
 import os
-from datetime import datetime
-##
+import html as html_lib
+
 # Configuration
 JSON_FILE = "ps2_games_pcsx2.json"
 OUTPUT_HTML = "index.html"
-PLACEHOLDER_IMAGE = "https://raw.githubusercontent.com/igiteam/ps2-covers/refs/heads/main/ps2-cover-default.png"
-RAW_BASE_URL = "https://raw.githubusercontent.com/igiteam/ps2-covers/refs/heads/main/default"
+
+PLACEHOLDER_IMAGE = (
+    "https://raw.githubusercontent.com/igiteam/ps2-covers/"
+    "refs/heads/main/ps2-cover-default.png"
+)
+
+RAW_BASE_URL = (
+    "https://raw.githubusercontent.com/igiteam/ps2-covers/"
+    "refs/heads/main/default"
+)
+
 
 def load_games_data():
-    """Load games from JSON file and remove duplicates by TITLE"""
+    """Load games and remove duplicates by title."""
+
     if not os.path.exists(JSON_FILE):
         print(f"❌ Error: {JSON_FILE} not found!")
-        print("Please run the cover downloader first to generate the JSON file.")
+        print("Please run the cover downloader first.")
         return None
-    
-    with open(JSON_FILE, 'r', encoding='utf-8') as f:
+
+    with open(JSON_FILE, "r", encoding="utf-8") as f:
         games = json.load(f)
-    
-    # Remove duplicates by TITLE (keep first occurrence)
+
     seen_titles = set()
     unique_games = []
+
     for game in games:
-        title = game['title'].lower().strip()
-        if title not in seen_titles:
-            seen_titles.add(title)
+        title = game.get("title", "").strip()
+        title_key = title.lower()
+
+        if title_key not in seen_titles:
+            seen_titles.add(title_key)
             unique_games.append(game)
-    
+
     if len(unique_games) < len(games):
-        print(f"✅ Removed {len(games) - len(unique_games)} duplicates by title")
-    
-    print(f"✅ Loaded {len(unique_games)} unique games from {JSON_FILE}")
+        print(
+            f"✅ Removed {len(games) - len(unique_games)} "
+            "duplicates by title"
+        )
+
+    print(f"✅ Loaded {len(unique_games)} unique games")
     return unique_games
 
+
 def generate_html(games):
-    """Generate the grid website HTML"""
-    
-    games.sort(key=lambda x: x['title'].lower())
-    
+    """Generate the PS2 games grid website."""
+
+    games.sort(key=lambda x: x.get("title", "").lower())
+
     total_games = len(games)
-    with_2d = sum(1 for g in games if g['cover_url'] != PLACEHOLDER_IMAGE)
-    
+
+    with_2d = sum(
+        1 for g in games
+        if g.get("cover_url") != PLACEHOLDER_IMAGE
+    )
+
     html = f"""<!DOCTYPE html>
 <html lang="en">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <title>PS2 Games Collection</title>
 
   <link rel="icon" href="https://raw.githubusercontent.com/igiteam/ps2-covers/refs/heads/main/ps2-icon.png" type="image/png">
   <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/igiteam/ps2-covers/refs/heads/main/ps2-icon.png" sizes="180x180">
-  <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/igiteam/ps2-covers/refs/heads/main/ps2-icon.png" sizes="192x192">
-  <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/igiteam/ps2-covers/refs/heads/main/ps2-icon.png" sizes="512x512">
+
   <meta itemprop="name" content="PS2 Games Collection">
   <meta property="og:title" content="PS2 Games Collection">
-  <meta property="og:url" content="">
   <meta property="og:type" content="website">
   <meta name="twitter:title" content="PS2 Games Collection">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/igiteam/ps2-covers/refs/heads/main/ps2-icon.png" sizes="180x180">
 
   <style>
     body {{
       background-color: #1a1a1a;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
+        Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
       margin: 4px 20px;
       padding: 0;
     }}
@@ -81,17 +109,23 @@ def generate_html(games):
       grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
       gap: 10px;
       max-width: 1400px;
-      margin: 0 auto;
+      margin: 4px auto 0;
       background-color: #1a1a1a;
-      margin-top: 4px;
       z-index: 1000;
+    }}
+
+    .title-card-link {{
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      min-width: 0;
     }}
 
     .title-card {{
       background: #2a2a2a;
       border-radius: 8px;
       overflow: hidden;
-      transition: transform 0.2s;
+      transition: transform 0.2s, opacity 0.2s;
     }}
 
     .title-card:hover {{
@@ -119,7 +153,6 @@ def generate_html(games):
       transition: opacity 0.3s;
     }}
 
-    /* Style for when image fails to load */
     .title-card-image-container img.error {{
       opacity: 0;
     }}
@@ -179,13 +212,12 @@ def generate_html(games):
       color: inherit;
     }}
 
-    /* Search container */
     #saved-search-container {{
       position: sticky;
+      top: 0;
       z-index: 10000;
-      margin-left: auto;
-      margin-right: auto;
-      margin: 8px 0px;
+      margin: 8px 0;
+      background-color: #1a1a1a;
     }}
 
     #saved-search-input {{
@@ -196,6 +228,7 @@ def generate_html(games):
       background: #444;
       color: white;
       flex: 1;
+      min-width: 0;
     }}
 
     .search-row {{
@@ -209,6 +242,7 @@ def generate_html(games):
       height: 34px;
       border-radius: 4px;
       object-fit: cover;
+      flex-shrink: 0;
     }}
 
     #saved-search-input::placeholder {{
@@ -225,193 +259,365 @@ def generate_html(games):
     .hidden-game {{
       display: none !important;
     }}
-
-    .highlight-saved {{
-      border: 3px solid #42991b;
-      box-shadow: 0 0 15px #42991b;
-    }}
   </style>
 </head>
 
 <body>
+
   <div id="saved-search-container">
     <div class="search-row">
-      <img src="https://raw.githubusercontent.com/igiteam/ps2-covers/refs/heads/main/ps2-icon.png" class="icon" alt="PS2 logo">
-      <input type="text" id="saved-search-input" placeholder="Search games...">
-      <a href="https://www.ebay.co.uk/sch/i.html?_nkw=2x+ps2+controller+with+usb+adapter" target="_blank">
-        <img src="https://raw.githubusercontent.com/igiteam/ps2-covers/refs/heads/main/ps2-controller.png" class="icon" alt="PS2">
+
+      <img
+        src="https://raw.githubusercontent.com/igiteam/ps2-covers/refs/heads/main/ps2-icon.png"
+        class="icon"
+        alt="PS2 logo"
+      >
+
+      <input
+        type="text"
+        id="saved-search-input"
+        placeholder="Search games..."
+        autocomplete="off"
+      >
+
+      <a
+        href="https://www.ebay.co.uk/sch/i.html?_nkw=2x+ps2+controller+with+usb+adapter"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <img
+          src="https://raw.githubusercontent.com/igiteam/ps2-covers/refs/heads/main/ps2-controller.png"
+          class="icon"
+          alt="PS2 Controller"
+        >
       </a>
-      <a href="https://igiteam.github.io/ps2magazines/" target="_blank">
-        <img src="https://raw.githubusercontent.com/igiteam/ps2-covers/refs/heads/main/ps2-magazine.png" class="icon" alt="PS2 Magazine">
+
+      <a
+        href="https://igiteam.github.io/ps2magazines/"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <img
+          src="https://raw.githubusercontent.com/igiteam/ps2-covers/refs/heads/main/ps2-magazine.png"
+          class="icon"
+          alt="PS2 Magazine"
+        >
       </a>
+
     </div>
+
     <div id="saved-results-count"></div>
   </div>
 
   <div class="row" id="results">
 """
 
+    # Generate game cards
     for game in games:
-        title = game['title'].replace('"', '&quot;')
-        
-        if game['cover_url'] != PLACEHOLDER_IMAGE:
-            cover_url = game['cover_url']
-            has_real_cover = True
-        elif game['cover_3d_url'] != PLACEHOLDER_IMAGE:
-            cover_url = game['cover_3d_url']
-            has_real_cover = True
-        else:
-            cover_url = PLACEHOLDER_IMAGE
-            has_real_cover = False
-        
-        # If no real cover, show title overlay immediately
-        title_display = "flex" if not has_real_cover else "none"
-        
-        html += f"""
-        <div class="col px-1 mb-4 title-card" data-title-name="{title}" data-title-status="Play">
-          <a target="_blank" rel="norefferer" href="https://github.com/igiteam/ps2-covers">
-            <div class="mx-auto title-card-container">
-              <div class="title-card-image-container" style="position: relative;">
-                <img
-                  src="{cover_url}"
-                  loading="lazy"
-                  title="{title}"
-                  onerror="this.classList.add('error'); this.src='{PLACEHOLDER_IMAGE}'; this.parentNode.querySelector('.fallback-title').style.display='flex';">
-                <div class="fallback-title" style="display: {title_display}; position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.9)); color: white; padding: 15px 8px 8px 8px; font-size: 12px; text-align: center; font-weight: 500;">{title}</div>
-              </div>
-              <div class="fill-color-Playable card-body text-center py-1 my-0"><small><strong>Play</strong></small></div>
-            </div>
-          </a>
-        </div>"""
 
-    html += f"""
+        title = game.get("title", "").strip()
+
+        # Safely escape HTML characters
+        safe_title = html_lib.escape(title, quote=True)
+
+        cover_url = game.get("cover_url", PLACEHOLDER_IMAGE)
+        cover_3d_url = game.get("cover_3d_url", PLACEHOLDER_IMAGE)
+
+        if cover_url and cover_url != PLACEHOLDER_IMAGE:
+            selected_cover = cover_url
+            has_real_cover = True
+
+        elif cover_3d_url and cover_3d_url != PLACEHOLDER_IMAGE:
+            selected_cover = cover_3d_url
+            has_real_cover = True
+
+        else:
+            selected_cover = PLACEHOLDER_IMAGE
+            has_real_cover = False
+
+        safe_cover = html_lib.escape(selected_cover, quote=True)
+
+        title_display = "flex" if not has_real_cover else "none"
+
+        html += f"""
+    <div
+      class="col px-1 mb-4 title-card"
+      data-title-name="{safe_title}"
+      data-title-status="Play"
+    >
+
+      <a
+        target="_blank"
+        rel="noopener noreferrer"
+        href="https://github.com/igiteam/ps2-covers"
+      >
+
+        <div class="mx-auto title-card-container">
+
+          <div
+            class="title-card-image-container"
+            style="position: relative;"
+          >
+
+            <img
+              src="{safe_cover}"
+              loading="lazy"
+              title="{safe_title}"
+              alt="{safe_title}"
+              onerror="
+                this.classList.add('error');
+                this.src='{PLACEHOLDER_IMAGE}';
+                this.parentNode.querySelector('.fallback-title').style.display='flex';
+              "
+            >
+
+            <div
+              class="fallback-title"
+              style="
+                display: {title_display};
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: linear-gradient(transparent, rgba(0,0,0,0.9));
+                color: white;
+                padding: 15px 8px 8px 8px;
+                font-size: 12px;
+                text-align: center;
+                font-weight: 500;
+              "
+            >{safe_title}</div>
+
+          </div>
+
+          <div class="fill-color-Playable card-body text-center py-1 my-0">
+            <small><strong>Play</strong></small>
+          </div>
+
+        </div>
+
+      </a>
+
+    </div>
+"""
+
+    html += """
   </div>
 
   <script>
-    // Convert title cards to links
-    function wrapCardsWithLinks() {{
-      document.querySelectorAll('.title-card').forEach(card => {{
-        const serial = card.getAttribute('data-serial');
+  document.addEventListener('DOMContentLoaded', function () {
+
+    const resultsContainer = document.getElementById('results');
+    const searchInput = document.getElementById('saved-search-input');
+    const resultsCount = document.getElementById('saved-results-count');
+
+    // ==========================================
+    // WRAP GAME CARDS WITH SEARCH LINKS
+    // ==========================================
+
+    function wrapCardsWithLinks() {
+
+      document.querySelectorAll('.title-card').forEach(card => {
+
+        // Do not wrap a card more than once
+        if (card.parentElement?.classList.contains('title-card-link')) {
+          return;
+        }
+
         const title = card.getAttribute('data-title-name');
+        const serial = card.getAttribute('data-serial');
         const status = card.getAttribute('data-title-status');
 
+        // Remove the original inner GitHub link
         const existingInnerLink = card.querySelector('a');
-        if (existingInnerLink) {{
-          while (existingInnerLink.firstChild) {{
-            card.insertBefore(existingInnerLink.firstChild, existingInnerLink);
-          }}
-          existingInnerLink.remove();
-        }}
 
-        let url_path = '';
-        if (title) {{
-          url_path = title
+        if (existingInnerLink) {
+          while (existingInnerLink.firstChild) {
+            card.insertBefore(existingInnerLink.firstChild, existingInnerLink);
+          }
+
+          existingInnerLink.remove();
+        }
+
+        // Create URL slug
+        let urlPath = '';
+
+        if (title) {
+          urlPath = title
             .toLowerCase()
             .replace(/[^\\w\\s-]/g, '')
             .replace(/\\s+/g, '-')
             .replace(/-+/g, '-')
             .replace(/^-|-$/g, '');
-        }} else if (serial) {{
-          url_path = serial;
-        }}
 
-        if (url_path) {{
-          const urlParams = new URLSearchParams(window.location.search);
-          const targetUrl = urlParams.get('url');
-          const link = document.createElement('a');
+        } else if (serial) {
+          urlPath = serial;
+        }
 
-          if (targetUrl) {{
-            link.href = targetUrl.replace(/\\/$/, '') + '/PS2/' + url_path;
-          }} else {{
-            link.href = 'https://meyt.macosxjs.com/search/' + url_path + ' PS2';
-          }}
+        if (!urlPath) return;
 
-          link.className = 'title-card-link';
-          link.rel = 'noopener noreferrer';
-          link.target = '_blank';
-          
-          if (title) link.setAttribute('data-title-name', title);
-          if (serial) link.setAttribute('data-serial', serial);
-          if (status) link.setAttribute('data-title-status', status);
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetUrl = urlParams.get('url');
 
-          card.parentNode.insertBefore(link, card);
-          link.appendChild(card);
+        const link = document.createElement('a');
 
-          const badge = card.querySelector('.fill-color-Playable, .status-badge');
-          if (badge && status) {{
-            badge.classList.add('status-' + status.toLowerCase());
-          }}
-        }}
-      }});
-    }}
+        if (targetUrl) {
+          link.href = targetUrl.replace(/\\/$/, '') + '/PS2/' + urlPath;
+        } else {
+          link.href =
+            'https://meyt.macosxjs.com/search/' +
+            encodeURIComponent(urlPath + ' PS2');
+        }
 
-    // Run link wrapping
+        link.className = 'title-card-link';
+        link.rel = 'noopener noreferrer';
+        link.target = '_blank';
+
+        link.style.display = 'block';
+        link.style.textDecoration = 'none';
+        link.style.color = 'inherit';
+
+        // Copy data attributes
+        if (title) {
+          link.setAttribute('data-title-name', title);
+        }
+
+        if (serial) {
+          link.setAttribute('data-serial', serial);
+        }
+
+        if (status) {
+          link.setAttribute('data-title-status', status);
+        }
+
+        // Wrap the card
+        card.parentNode.insertBefore(link, card);
+        link.appendChild(card);
+
+      });
+    }
+
     wrapCardsWithLinks();
-    if (document.readyState === 'loading') {{
-      document.addEventListener('DOMContentLoaded', wrapCardsWithLinks);
-    }} else {{
-      wrapCardsWithLinks();
-    }}
-    setTimeout(wrapCardsWithLinks, 500);
 
-    // Search functionality
-    document.getElementById('saved-search-input').addEventListener('input', function (e) {{
-      const searchTerm = e.target.value.toLowerCase();
-      const cards = document.querySelectorAll('.title-card');
-      let count = 0;
+    // ==========================================
+    // SAVE ORIGINAL ALPHABETICAL ORDER
+    // ==========================================
 
-      cards.forEach(card => {{
-        const title = card.getAttribute('data-title-name') || '';
-        if (title.toLowerCase().includes(searchTerm) && searchTerm) {{
-          card.classList.remove('hidden-game');
-          card.classList.add('highlight-saved');
-          count++;
-        }} else if (searchTerm) {{
-          card.classList.add('hidden-game');
-          card.classList.remove('highlight-saved');
-        }} else {{
-          card.classList.remove('hidden-game');
-          card.classList.remove('highlight-saved');
-        }}
-      }});
+    const originalLinks = Array.from(
+      resultsContainer.querySelectorAll(':scope > .title-card-link')
+    );
 
-      document.getElementById('saved-results-count').textContent =
-        searchTerm ? `Found ${{count}} game${{count !== 1 ? 's' : ''}}` : '';
-    }});
+    // ==========================================
+    // SEARCH AND REORDER
+    // ==========================================
 
-    // Keyboard shortcut
-    document.addEventListener('keydown', function(e) {{
-      if (e.key === '/' && !document.getElementById('saved-search-input').matches(':focus')) {{
+    searchInput.addEventListener('input', function (e) {
+
+      const searchTerm = e.target.value.toLowerCase().trim();
+
+      const matchingLinks = [];
+      const remainingLinks = [];
+
+      originalLinks.forEach(link => {
+
+        const title = (
+          link.getAttribute('data-title-name') || ''
+        ).toLowerCase();
+
+        if (searchTerm && title.includes(searchTerm)) {
+          matchingLinks.push(link);
+        } else {
+          remainingLinks.push(link);
+        }
+
+      });
+
+      // Matching cards first, remaining cards afterwards
+      const orderedLinks = searchTerm
+        ? [...matchingLinks, ...remainingLinks]
+        : originalLinks;
+
+      orderedLinks.forEach(link => {
+
+        const isMatch = matchingLinks.includes(link);
+
+        // Hide non-matching cards
+        link.classList.toggle(
+          'hidden-game',
+          !!searchTerm && !isMatch
+        );
+
+        // Physically reorder cards inside the grid
+        resultsContainer.appendChild(link);
+
+      });
+
+      // Update results counter
+      resultsCount.textContent = searchTerm
+        ? `Found ${matchingLinks.length} game${matchingLinks.length !== 1 ? 's' : ''}`
+        : '';
+
+    });
+
+    // ==========================================
+    // KEYBOARD SHORTCUT
+    // ==========================================
+
+    document.addEventListener('keydown', function (e) {
+
+      if (
+        e.key === '/' &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        document.activeElement !== searchInput
+      ) {
         e.preventDefault();
-        document.getElementById('saved-search-input').focus();
-      }}
-    }});
-  </script>
-</body>
+        searchInput.focus();
+      }
 
+      // Escape clears search
+      if (e.key === 'Escape' && document.activeElement === searchInput) {
+        searchInput.value = '';
+        searchInput.dispatchEvent(new Event('input'));
+        searchInput.blur();
+      }
+
+    });
+
+  });
+  </script>
+
+</body>
 </html>
 """
 
     return html
 
+
 def main():
+
     print("🎮 PS2 Games Grid Generator (Xemu Style)")
     print("=" * 50)
-    
+
     games = load_games_data()
+
     if not games:
         return
-    
+
     print("🔄 Generating grid website...")
+
     html_content = generate_html(games)
-    
-    with open(OUTPUT_HTML, 'w', encoding='utf-8') as f:
+
+    with open(OUTPUT_HTML, "w", encoding="utf-8") as f:
         f.write(html_content)
-    
+
     print(f"✅ Website generated: {OUTPUT_HTML}")
-    print(f"\n📊 Statistics:")
+
+    print("\\n📊 Statistics:")
     print(f"   - Total games: {len(games)}")
-    print(f"   - With 2D covers: {sum(1 for g in games if g['cover_url'] != PLACEHOLDER_IMAGE)}")
+    print(f"   - With 2D covers: {sum(1 for g in games if g.get('cover_url') != PLACEHOLDER_IMAGE)}")
+
 
 if __name__ == "__main__":
     main()
