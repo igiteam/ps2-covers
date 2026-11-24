@@ -3,10 +3,12 @@ ps2-covers
 
 https://ps2games.macosxjs.com/
 
+```
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
+```
 
 *⭐**Star this repo if it was useful to you**⭐*
 
