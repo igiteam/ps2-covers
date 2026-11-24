@@ -257,8 +257,8 @@ def generate_html(games):
         if game['cover_url'] != PLACEHOLDER_IMAGE:
             cover_url = game['cover_url']
             has_real_cover = True
-        elif game['3d_cover_url'] != PLACEHOLDER_IMAGE:
-            cover_url = game['3d_cover_url']
+        elif game['cover_3d_url'] != PLACEHOLDER_IMAGE:
+            cover_url = game['cover_3d_url']
             has_real_cover = True
         else:
             cover_url = PLACEHOLDER_IMAGE
