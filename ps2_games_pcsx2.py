@@ -11,7 +11,7 @@ from datetime import datetime
 
 # Configuration
 JSON_FILE = "ps2_games_pcsx2.json"
-OUTPUT_HTML = "ps2_games_pcsx2.html"
+OUTPUT_HTML = "index.html"
 PLACEHOLDER_IMAGE = "https://raw.githubusercontent.com/igiteam/ps2-covers/refs/heads/main/ps2-cover-default.png"
 RAW_BASE_URL = "https://raw.githubusercontent.com/igiteam/ps2-covers/refs/heads/main/default"
 
@@ -238,7 +238,7 @@ def generate_html(games):
     <div class="search-row">
       <img src="https://raw.githubusercontent.com/igiteam/ps2-covers/refs/heads/main/ps2-icon.png" class="icon" alt="PS2 logo">
       <input type="text" id="saved-search-input" placeholder="Search games...">
-      <a href="" target="_blank">
+      <a href="https://www.ebay.co.uk/sch/i.html?_nkw=2x+ps2+controller+with+usb+adapter" target="_blank">
         <img src="https://raw.githubusercontent.com/igiteam/ps2-covers/refs/heads/main/ps2-controller.png" class="icon" alt="PS2">
       </a>
       <a href="https://igiteam.github.io/ps2magazines/" target="_blank">
